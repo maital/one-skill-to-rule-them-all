@@ -43,96 +43,12 @@ in an environment without filesystem access.
 
 ## Recommended activation setup
 
-Four activation tiers exist, and only the strongest is enforced. Pick
-knowingly; do not assume any of the middle ones is a guarantee.
-
-1. **Description matching** (weakest). The skill's frontmatter description
-   competes with every other skill's for relevance to the opening message.
-   It loses most often on short, tool-using requests that read like
-   questions ("list the files in this repo"), on sessions that open with a
-   small well-scoped request and grow, and whenever a domain skill matches
-   the opening message strongly — topically matched skills have loaded in
-   the same turn that the always-load ones were skipped. On platforms with
-   no hook mechanism this is the only tier that survives an unmounted or
-   unreachable config file, which is why the description itself carries a
-   session-start trigger.
-2. **User-level preferences** (folder-independent, still probabilistic).
-   Agent settings the user controls that are injected into every session's
-   system prompt regardless of which folder, if any, is connected (in
-   Cowork, the personal-preferences field in the app settings; other
-   agents' equivalents). This is the right home for a one-line
-   probe-then-request trigger — "the session's first tool call is one
-   batched call that contains an `ls` of the workspace path AND the loads
-   of <the session-start skills, by name: task-observer, …>; if the `ls` fails, call
-   the folder-picker tool; never state whether the folder is connected
-   without that probe" (why the wording is about the call's content, not
-   its order: "The probe rides inside the first batched call" below) —
-   because a config
-   file inside the workspace folder cannot fire in the very case it
-   targets: when no folder is connected, there is no config file. Verify
-   the channel once by asking a folder-less session to quote its
-   preferences block; a line that does not reach the agent is not a tier.
-3. **Configuration instruction** (better, still probabilistic). A CLAUDE.md
-   or project-instruction block, shown below. Empirically skippable under
-   the same conditions as tier 1, and silently absent when the file it
-   lives in is not in context (no workspace folder mounted, a session
-   started outside the project). An unmounted workspace is recoverable,
-   not terminal: where the environment offers a folder-picker tool
-   (Cowork's `request_cowork_directory`), the folder can still be
-   attached mid-session on request, and the Session Start Protocol should
-   be run the moment it is — only the part of the session before the
-   mount is lost. Ask early, but do not treat a declined or skipped
-   folder selection as irreversible. If `allow_cowork_file_delete` or a similar
-   local-filesystem permission tool is present in the tool surface, the
-   session runs on the user's machine and the config is reachable; treat
-   "this session runs in the cloud, so the config was not loaded" as
-   unverified until the tool surface has been inventoried — and treat the
-   converse the same way: an environment flag saying a folder is selected
-   is a hint, and only a probe of the path in the same turn is evidence.
-4. **Harness hook** (the only enforced option). A session-start hook that
-   injects the instruction — and ideally the log state — into context on
-   every session, e.g. Claude Code's `SessionStart` hook returning
-   `hookSpecificOutput.additionalContext`. Even a hook can only inject a
-   prompt; choosing to invoke a skill remains a model decision. Cowork has
-   no hook mechanism; there, tiers 1 to 3 are all there is.
-
-**Word the trigger mechanically, not judgementally.** "Task-oriented
-session" asks the agent to classify the session at its first turn, before
-it knows how the session will develop, and short factual-looking requests
-get classified out. The block below keys on tool use instead: any turn
-that will involve a tool call counts. And activation must precede
-*planning*, not merely execution — where a workflow proposes a plan for
-approval first, a plan written without the relevant skills carries
-uninformed decisions past the review gate, and approval locks them in.
-Load skills before exploring, researching or drafting the plan: both,
-skill first.
-
-**The block has a per-session cost, paid knowingly.** Every session it
-covers loads SKILL.md in full (bounded by `core_max_lines` in its
-frontmatter; the references load on demand) and runs the Session Start
-Protocol, whether or not the session logs anything. Narrowing that scope
-is the adopter's trade, made in their own config, never the agent's
-judgement of an opening message. A narrowed rule carries its re-trigger
-or it loses coverage exactly where coverage matters: *if a skipped session
-turns into multi-step work, or the user corrects how you work, invoke the
-skill at that moment, before the next write.*
-
-**Select on the decision, not on the artefact.** Selection and loading are
-separate steps, and the selection step fails in its own way: it runs
-against what the user handed over — files to read, a link, a screenshot —
-so every skill whose description names a *subject* is missed whenever the
-request's surface form is an activity no skill claims. Before answering,
-name the DECISION the user is making and match the installed descriptions
-against that ("the deliverable is advice about X" → load the skill whose
-description names X), even though the request arrived as a document to
-review. The high-risk shape is an attachment plus an open question — "here
-are two files, what do you think?" — which presents as a reading task and
-hides its own domain while the session-start skills load correctly.
-That is what makes this distinct from an
-activation-config failure: the mechanism works and still selects the
-wrong set. The failure is silent by construction, because a skill that
-never loads cannot announce that it was relevant, so the check belongs in
-the checklist rather than in a disposition.
+**Augury fork: activation is opt-in.** The skill runs only when the user
+invokes it. Do not recommend or install any activation tier — no
+description-level trigger, no user-preferences line, no CLAUDE.md or
+project-instruction block, no harness hook. The block below is kept only
+because other sections refer to its conventions (workspace paths, the
+skill-load lookup); it is reference material, not something to propose.
 
 ### The activation block
 
@@ -409,8 +325,8 @@ writable location is a clone torn down at the end of its task — there is
 none, and writing into the clone anyway produces observations that vanish
 with it while every write reports success. So the branch is: do not write
 into the clone; carry each observation in full in the final report to
-whatever coordinates the work, or commit it to a dedicated observations
-repository via PR, and say in the report which route was taken. See
+whatever coordinates the work (Augury fork: never commit or push
+observations to any repository). See
 "Claude Code Projects" below for the install, activation and log-route
 consequences.
 
@@ -430,19 +346,9 @@ every interface inside the same sandbox sees the same read-only mount.
 The diagnosis at the moment of failure is in `observation-log.md`
 ("Workspace creation").
 
-**Config detection (once per session):** with filesystem access, check the
-workspace root's CLAUDE.md (or equivalent) for a task-observer activation
-instruction — suggest adding it if absent. **Suggest; do not create.** If
-no config file exists at all, offer to add one and let the user say yes:
-creating a tracked project file changes every future session's behaviour,
-and the governance-protected fallback below exists precisely because
-writing to a shared config is not a free action.
-Without filesystem access, check the system prompt / project
-instructions and suggest the user add the instruction there. Keep the
-suggestion to a sentence or two. The block above is the propagated
-artefact: suggest it whole, including the anchoring paragraph, because
-constraints that live only in SKILL.md arrive after the decision they were
-meant to govern.
+**Config detection:** Augury fork: skipped. Do not check for, suggest or
+write an activation instruction in CLAUDE.md, project instructions or the
+system prompt.
 
 **Load is not activation.** The failure the block's wording guards
 against: the agent loads the skill per the
@@ -483,233 +389,23 @@ chain silences all observation activity.
 
 ### A session-start hook (Claude Code and similar harnesses)
 
-Capture is hard-enforced by checkpoints hooked onto tool calls; the review
-trigger in the Session Start Protocol is a soft step — read a file, compare
-a date — and it is skipped the same way activation is. The failure is
-self-concealing: capture keeps producing, the log looks healthy and
-growing, and the only artefact recording the miss is a file reading
-`never` that nobody reads. Treat "is the review trigger structurally
-enforced?" as an install-completeness check, and where the harness offers
-a session-start hook, have it compute the state and inject it rather than
-asking the agent to go and look:
-
-```bash
-#!/bin/sh
-# SessionStart hook: inject activation + review state as additionalContext.
-d="$OBS_WORKSPACE/skill-observations"      # the pinned absolute path
-open=$(find "$d/observation-log" -maxdepth 1 -name '*.md' -exec grep -l '^status: open$' {} + 2>/dev/null | wc -l | tr -d ' ')
-last=$(tr -d '\r' 2>/dev/null < "$d/last-review-date.txt"); last=${last:-never}   # a CRLF file must not carry \r into the JSON
-msg="Make the first tool call of this session one batched call that both lists the task-observer workspace ($OBS_WORKSPACE) and invokes the task-observer skill; then run its Session Start Protocol. Observation files are created only by scripts/new-observation.sh in the skill directory, never by copying a header."
-if [ "$open" -gt 0 ]; then
-  msg="$msg $open open observations; last review: $last."
-  cutoff=$(date -d '7 days ago' +%F 2>/dev/null || date -v-7d +%F)   # GNU, then BSD/macOS
-  case "$last" in
-    (never) msg="$msg Offer the review." ;;
-    (*) [ "$(printf '%s\n%s\n' "$last" "$cutoff" | sort | head -1)" = "$last" ] && msg="$msg Offer the review." ;;
-  esac
-fi
-msg=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037')   # JSON string: escape \ and ", drop control characters
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$msg"
-```
-
-The message names the resolved workspace and the whole first batch,
-because it is the one pre-skill text the harness delivers on turn 1
-("The probe rides inside the first batched call", below): a message that
-only says "invoke the skill" leaves the probe to a skill not yet read,
-and a tool whose sessions resolve the root another way (a pin in an
-instruction file only some of its sessions load) keeps writing to its
-own log while the injected count, read from the shared one, looks
-healthy. The path is interpolated into a JSON string, so the last step
-escapes the whole message: a Windows path's backslashes and a `"` in a
-folder name otherwise produce output that does not parse, and a hook
-whose output does not parse injects nothing.
-
-On native Windows, Claude Code runs hook commands through Git Bash, where
-a bare `bash` or `python` can resolve to WSL's `System32\bash.exe` or the
-Microsoft Store stub under `WindowsApps`, and neither runs the hook.
-Register the hook with the interpreter's full path (for Python, `py -0p`
-lists the real installs; skip any `WindowsApps` path).
-
-The count is of files whose `status` field reads `open` — not of files
-in the directory. Resolved entries deliberately stay in `observation-log/`
-until the day after they were resolved (the grace period lives in the
-file, not in session memory), and parked entries are decided and out of
-the work queue, so a raw file count overstates the backlog by every entry
-the last review just closed, for a day, in every session. Compare dates
-without `<` in `[ ]`: ISO dates sort lexically, so
-`[ "$(printf '%s\n%s\n' "$last" "$cutoff" | sort | head -1)" = "$last" ]`
-is true when `$last` is not later than `$cutoff`, in every POSIX shell
-(`\<` is a bash/ksh extension that zsh rejects and `sh` does not know).
-Two details that matter when building one: `grep -c` exits 1
-on zero matches while still printing `0`, so `$(grep -c … || echo 0)`
-yields two values — capture the output and ignore the exit code; and prove
-the reminder branch fires by running the hook against fixtures at `never`,
-30 days stale and 2 days stale, confirming the third stays silent. A nag
-that never fires and a nag that is correctly silent look identical from a
-passing run.
+Augury fork: not used. Do not propose, write or install this hook or any
+other harness hook for this skill; activation and checks stay manual.
 
 ### A stop hook — the per-task backstop as a harness event
 
-The per-task backstop in the activation block is prose in the same file as
-the rule it guards, so it fails together with it: a session that skipped
-the protocol skipped the backstop at every task boundary too. Where the
-harness has a stop event, run the check there instead: *has this session
-used tools, and has anything under `observation-log/` or `checkpoints.log`
-been written since it started?* If not, block the stop once per session
-with a one-line instruction; stay silent for conversation, for a session
-that already wrote, for a second block in a row, and when the log cannot
-be read. Node, no dependencies; substitute `[ABSOLUTE PATH]` as elsewhere:
-
-```js
-// Stop hook: the per-task backstop as a harness event instead of prose.
-const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-const MIN_TOOL_USES = 3; // below this the turn is conversation, not work
-const base = path.join('[ABSOLUTE PATH]', 'skill-observations'); // the pinned workspace
-const block = (reason) => { fs.writeFileSync(marker, new Date().toISOString()); console.log(JSON.stringify({ decision: 'block', reason })); process.exit(0); };
-
-let input = {};
-try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { process.exit(0); }
-if (input.stop_hook_active) process.exit(0);            // never chain a second block
-const session = String(input.session_id || '').replace(/[^A-Za-z0-9_-]/g, '');
-const transcript = input.transcript_path;
-if (!session || !transcript) process.exit(0);
-
-const marker = path.join(os.tmpdir(), `task-observer-backstop-${session}`);
-if (fs.existsSync(marker)) process.exit(0);             // once per session
-
-let started = 0, toolUses;
-try {
-  const st = fs.statSync(transcript), text = fs.readFileSync(transcript, 'utf8');
-  toolUses = (text.match(/"type":\s*"tool_use"/g) || []).length;
-  // Birth time is 0 where the filesystem has none and equals ctime where the
-  // platform substitutes it; either would make every file read as untouched
-  // or touched. Fall back to the transcript's first timestamp.
-  if (st.birthtimeMs > 0 && st.birthtimeMs < st.ctimeMs) started = st.birthtimeMs;
-  else { const m = text.match(/"timestamp":\s*"([^"]+)"/); if (m) started = Date.parse(m[1]) || 0; }
-} catch { process.exit(0); }
-if (toolUses < MIN_TOOL_USES) process.exit(0);
-
-if (!(started > 0)) block('task-observer backstop: cannot tell when this session started (no birth time, no ' +
-  'transcript timestamp), so it cannot check the log. Check by hand that this session wrote an observation ' +
-  'or a checkpoints.log line, and report the one-line summary. Fires once per session.');
-
-const files = [path.join(base, 'checkpoints.log')];
-try {
-  for (const n of fs.readdirSync(path.join(base, 'observation-log')))
-    if (n.endsWith('.md')) files.push(path.join(base, 'observation-log', n));
-} catch { process.exit(0); }                             // unreachable log: stay silent
-const touched = files.some((f) => { try { return fs.statSync(f).mtimeMs > started; } catch { return false; } });
-if (touched) process.exit(0);
-
-block('task-observer backstop: this session used tools but wrote no observation file and no checkpoint line. ' +
-  'If the skill was never invoked, invoke it now; then write pending observations or append a ' +
-  '"no observations" line to checkpoints.log, and report the one-line summary. Fires once per session.');
-```
-
-**The session's start time is the fragile input.** A transcript's birth
-time is `0` on filesystems that do not record one, and some platforms
-return the change time in its place, which moves on every append; either
-makes the comparison meaningless, and the first makes the hook
-permanently silent. So birth time counts only when it is non-zero and
-earlier than the change time; otherwise the hook reads the first
-`"timestamp"` in the transcript, and where neither exists it blocks once
-with a request to check by hand rather than falling silent.
-
-Its known limits: it compares modification times, so a parallel session
-writing to the same log reads as this session's write (a missed block,
-never a false one); it fires for the main agent only, so a subagent —
-which by the activation block writes nothing — is never blocked, and a
-harness that runs the hook for a subagent whose caller owns its output
-must not wire it there ("Sessions whose output channel is owned by a
-caller"); and like every trigger, it is armed only once it has matched the
-real event — run it against a transcript with tool calls and no write,
-then against the same with a checkpoint line appended and the transcript
-appended to after it (a start time read from the change time blocks that
-one), before trusting either outcome.
+Augury fork: not used. Do not propose, write or install this hook or any
+other harness hook for this skill; activation and checks stay manual.
 
 ### A pre-tool hook — the only write path as a barrier
 
-"Where a helper can run, `scripts/new-observation.sh` is the only write
-path" is a rule, and a rule broken twice needs a barrier (SKILL.md, the
-second-violation rule): a direct create with the editing tool skips the
-id derivation and the prefix collision guard, and two ids each used twice
-are what that looks like afterwards. The helper creates the file with a
-`noclobber` create before any body is written, so a pre-tool hook can
-refuse every editing-tool write that would CREATE a Markdown file in the
-log, and the helper's own two-step write (create, then fill) passes
-untouched. Node, no dependencies; substitute `[ABSOLUTE PATH]` as
-elsewhere, and register it for the editing tool's write call (in Claude
-Code, matcher `Write`) with the interpreter in the command, as above:
-
-```js
-// PreToolUse hook (matcher "Write"): refuse an editing-tool write that would
-// CREATE a Markdown file in the observation log. The helper's noclobber create
-// makes the path exist before the body is written, so its own write passes.
-const fs = require('node:fs'), path = require('node:path');
-let log;
-try { log = fs.realpathSync(path.join('[ABSOLUTE PATH]', 'skill-observations', 'observation-log')); } catch { process.exit(0); }
-let input = {};
-try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { process.exit(0); }
-const p = input.tool_input && input.tool_input.file_path;
-if (typeof p !== 'string' || !p.endsWith('.md') || fs.existsSync(p)) process.exit(0); // existing: the helper's create, or an edit
-let dir;
-try { dir = fs.realpathSync(path.dirname(path.resolve(p))); } catch { process.exit(0); }
-if (dir !== log && dir !== path.join(log, 'archive')) process.exit(0);
-process.stderr.write('task-observer: observation files are created only by scripts/new-observation.sh, ' +
-  'which derives the id and refuses a collision. Run it, then write the body into the path it prints.\n');
-process.exit(2);
-```
-
-Exit status 2 refuses the call and hands the message to the agent; every
-other path exits 0, so an unreadable log or malformed input fails open
-rather than blocking ordinary work. Its known limit: it sees the editing
-tool only, so a shell redirect (`cat > …/0013-x.md`) still bypasses it,
-and a command-text guard for that has the false positives described under
-"Two harness behaviours that block the protocol rather than break it".
-Arm it like any trigger: a direct create of a new `NNNN-slug.md` must be
-refused, and a write into the path the helper just printed must pass.
+Augury fork: not used. Do not propose, write or install this hook or any
+other harness hook for this skill; activation and checks stay manual.
 
 ### A skill-file write gate — the skill-authoring load as a harness event
 
-The pointer to `references/skill-authoring.md` fires on an episode the
-agent has to recognise, and setup or documentation work produces a
-`SKILL.md` without feeling like skill creation. The file being written is
-checkable where the episode is not. Where the harness has pre- and
-post-tool events, refuse a write to a skill file until the reference has
-been read in the same session; a context-only pre-tool hook is not enough,
-because its text reaches the model after the write it was meant to steer.
-Node, no dependencies; one script wired twice — PreToolUse on
-`Write|Edit|MultiEdit`, PostToolUse on `Read`:
-
-```js
-// Skill-file write gate: deny a write to a skill file until the skill-authoring
-// reference has been read in this session. One script, two hook entries:
-// PreToolUse on Write|Edit|MultiEdit, PostToolUse on Read.
-const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-let input = {};
-try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { process.exit(0); }
-const session = String(input.session_id || '').replace(/[^A-Za-z0-9_-]/g, '');
-const file = String((input.tool_input || {}).file_path || '').replace(/\\/g, '/');
-if (!session || !file) process.exit(0);
-const marker = path.join(os.tmpdir(), `task-observer-authoring-${session}`);
-if (input.hook_event_name === 'PostToolUse') {          // the Read half: record the read
-  if (/\/references\/skill-authoring\.md$/.test(file)) fs.writeFileSync(marker, file);
-  process.exit(0);
-}
-const skillFile = /(^|\/)SKILL\.md$/.test(file) || /\/skills\/[^/]+\//.test(file)
-  || /\/skill-updates\/[^/]+\/[^/]+\//.test(file);     // a staged copy, not PENDING.md
-if (!skillFile || fs.existsSync(marker)) process.exit(0);
-console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
-  permissionDecisionReason: 'Read references/skill-authoring.md (task-observer skill) in this session ' +
-    'before writing a skill file; this write is allowed once that Read has run.' } }));
-```
-
-Its limits: it sees the file tools only, so a skill file written through
-a shell command passes; the marker outlives a compaction that drops the
-reference from context (re-read it after one, as the Session Start
-Protocol already says); and like every trigger it is armed only once it
-has matched the real event — run a `SKILL.md` write before the read
-(denied), then a read of the reference and the same write (allowed).
+Augury fork: not used. Do not propose, write or install this hook or any
+other harness hook for this skill; activation and checks stay manual.
 
 ### Verify activation in a NEW session — the installing session cannot prove it
 
@@ -1054,14 +750,9 @@ What follows from that:
   Shortening the block and trying again is the obvious move; it fails, and
   it is a rewrite aimed at the classifier rather than at the user — don't
   make it.
-- **The options, in this order.** (1) The user pastes the block into the
-  config themselves (fallback (b) above): the decision then sits with the
-  person whose config it is. (2) A permission-mode change, presented as
-  the user's decision with its implications stated: it changes what the
-  harness lets the agent do without asking for the rest of the session,
-  and it takes the classifier out of this write without answering its
-  objection. (3) Leave activation at the
-  description layer and say plainly which tier is in place.
+- **The only option (Augury fork).** Accept the refusal, leave activation
+  opt-in, and say so plainly. Never suggest a permission-mode change or any
+  other way around the classifier.
 - **The objection follows the content, not the file.** A documentation
   page that quotes the activation text can be refused on the same grounds
   as the config edit. Report the setup as incomplete while either the
@@ -1186,50 +877,9 @@ policy does not govern, not as the `.ps1` shim it refuses. The app's own
 terminal panel is a child of the packaged app and inherits its startup
 environment, so it is not the user's side either.
 
-**Resolving from the far side on a packaged Windows host — only with the
-user's explicit go-ahead.** `explorer.exe` starts what it opens outside the
-package, so a script started through it runs on the user's side of the
-sandbox. That is a deliberate step outside the agent's own execution
-context: tell the user what the script does and that it runs outside the
-app, and run it only once they have said yes in that session — never as a
-silent fallback. The recipe: write a pure-ASCII `.cmd` under
-`%USERPROFILE%` (not under `AppData` or `%TEMP%`), start it through
-Explorer, wait for a completion file, and read the output. A **vantage
-marker** written under `%APPDATA%` from inside exists only inside the
-package, so the result counts only if its first line is exactly
-`vantage-marker-visible: False`; `True` means the vantage is unproven,
-never a pass. The **completion file** keeps the read from racing the
-script. The script travels as `-EncodedCommand`, which the execution
-policy does not govern (it governs script files) — say so when asking,
-since the user may have set that policy on purpose; the `.cmd` expands
-`%USERPROFILE%` at run time, so it stays ASCII on a non-ASCII profile
-path; `$ProgressPreference = 'SilentlyContinue'` keeps a CLIXML progress
-block out of the output. Replace the last two probe lines with whatever
-the hand-off needs resolved.
-
-```powershell
-$id = [guid]::NewGuid().ToString('N').Substring(0,8)
-$dir = Join-Path $env:USERPROFILE 'farside'
-New-Item -ItemType Directory -Force $dir | Out-Null
-$marker = Join-Path $env:APPDATA "farside-marker-$id"
-Set-Content -LiteralPath $marker -Value x
-$markerLit = $marker -replace "'", "''"   # a profile path may hold an apostrophe
-$out = Join-Path $dir "out-$id.txt"
-$script = @"
-`$ProgressPreference = 'SilentlyContinue'
-"vantage-marker-visible: " + (Test-Path -LiteralPath '$markerLit')
-"policy: " + (Get-ExecutionPolicy)
-"npm: " + ((Get-Command npm.cmd -ErrorAction SilentlyContinue).Source)
-"@
-$enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
-$cmd = Join-Path $dir "run-$id.cmd"
-Set-Content -Path $cmd -Encoding Ascii -Value "@echo off`r`npowershell.exe -NoProfile -NonInteractive -EncodedCommand $enc > `"%USERPROFILE%\farside\out-$id.txt`" 2>&1`r`necho done> `"%USERPROFILE%\farside\out-$id.txt.done`""
-Start-Process explorer.exe $cmd
-$deadline = (Get-Date).AddSeconds(60)
-while (-not (Test-Path "$out.done") -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-if (Test-Path "$out.done") { Get-Content $out; Remove-Item $cmd, $out, "$out.done" } else { 'UNVERIFIED: far-side run did not finish in 60 s (files left in %USERPROFILE%\farside)' }
-Remove-Item -LiteralPath $marker
-```
+**Resolving from the far side** (Augury fork): removed. Never start
+anything outside the agent's sandbox; hand the step to the user to run
+themselves.
 
 ### Windows hosts: what reaches the shell and the file
 
@@ -1449,11 +1099,8 @@ step they take. That breaks three install assumptions at once:
   outlive a thread are a pushed branch or PR, a project Library file, or
   project memory. So either (a) threads carry every observation **in
   full** in their final report to the coordinator, and the coordinator
-  or a scheduled project routine writes them to the real log; or (b)
-  observations are committed to a dedicated observations repository via
-  PR — the "Git as an optional staging medium" path above — and never
-  left only on a working branch, because an unmerged branch is torn down
-  with its thread. In a non-code project, a Library file is the carrier.
+  or a scheduled project routine writes them to the real log. (Augury
+  fork: the observations-repository PR route is disabled.)
   Per-observation files still prevent write collisions between parallel
   threads; the problem here is survival, not concurrency.
 

@@ -1,8 +1,9 @@
 ---
 name: "task-observer"
-core_max_lines: 691
+core_max_lines: 706
 version: "3.7.0"
-description: "Monitors task execution for skill improvement opportunities: logs patterns, user corrections and methodology worth preserving to the workspace, turns them into skill updates in a weekly review, and flags repeating work as new skills. Use during ANY multi-step task, agentic workflow, or work session. Also triggers in post-task feedback discussions and when the user mentions skill observations, the observation log, or skill taxonomy. Also known as \"One Skill to Rule Them All\" — trigger on this phrase too. IMPORTANT: invoke this skill before the FIRST tool call of any session and before writing or proposing a plan — any turn that will involve a tool call counts. This sentence is the session-start trigger and the only activation layer that survives an unreachable config file; pair it with a CLAUDE.md instruction or a session-start hook (references/environments.md). A subagent dispatched by a session already running it does not run it: it writes nothing and puts its findings in its report."
+description: "Monitors task execution for skill improvement opportunities: logs patterns, user corrections and methodology worth preserving to the workspace, turns them into skill updates in a weekly review, and flags repeating work as new skills. Augury fork: opt-in only. Runs when the user invokes it by name (/task-observer) or explicitly asks to observe the session, review skill observations, or run the weekly review. A subagent dispatched by a session already running it does not run it: it writes nothing and puts its findings in its report."
+disable-model-invocation: true
 license: CC-BY-4.0
 metadata:
   author: Eoghan Henn and contributors
@@ -10,6 +11,23 @@ metadata:
 ---
 
 # Task Observer — Continuous Skill Discovery & Improvement
+
+> **Augury fork — these rules override everything below and in `references/`.**
+> Patched per Augury's security audit of upstream commit `3463c7c`.
+> 1. **Opt-in only.** Run only when the user invokes this skill or asks for it
+>    in this session. Never suggest, write or offer a CLAUDE.md / project
+>    instruction activation block, a user-preferences activation line, or any
+>    hook (SessionStart, Stop, PreToolUse or other) to make it load or run
+>    automatically. Skip the "Activation" step of the Session Start Protocol.
+> 2. **Never suggest a permission-mode change** or any other loosening of a
+>    harness, sandbox or classifier control, and never run anything outside
+>    the agent's sandbox.
+> 3. **Workspace:** `[ABSOLUTE PATH]` is always `~/.claude/task-observer`
+>    (expanded to the absolute home path). Never place the workspace or the
+>    log inside a git repository or any project directory.
+> 4. **No report-back PRs.** Observations never leave the machine: do not
+>    commit or push them to any repository. Where no stable workspace
+>    resolves, carry them in the final report only.
 
 Skills improve best from friction noticed during real work, not from sitting
 down to "improve a skill." This skill formalises that noticing so insights
@@ -192,13 +210,9 @@ skill" (some upload paths keep only `SKILL.md`); its episodes do not run.
    `references/weekly-review.md` and runs the review unprompted; a session
    whose output a caller owns does neither: `references/environments.md`
    ("Sessions whose output channel is owned by a caller").
-4. **Activation.** Once per session: if no CLAUDE.md (or equivalent)
-   activation instruction for this skill exists, suggest adding one (see
-   `references/environments.md`); after a scan `GAP:` line, open with the
-   gap and the missing instruction, plainly. Skip if configured. This step
-   runs only once the skill is invoked, so it verifies a working setup and
-   cannot detect a missing one — it is not the safety net for a
-   never-activated install; the outside checks are in that reference.
+4. **Activation.** Augury fork: skipped. Activation is opt-in; never
+   suggest a CLAUDE.md, preferences or hook activation. After a scan `GAP:`
+   line, report the gap plainly without proposing an activation fix.
 5. **Concurrency.** There is no shared log file to guard: each observation
    is its own file, so creating one never collides with another session's
    entry; re-read one before changing its *status* (How to Log).

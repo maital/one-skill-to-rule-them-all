@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "one-skill-to-rule-them-all",
+  "name": "task-observer-pinned",
   "owner": {
     "name": "Eoghan Henn",
     "url": "https://rebelytics.com"
@@ -8,11 +8,8 @@
   "plugins": [
     {
       "name": "task-observer",
-      "source": {
-        "source": "github",
-        "repo": "rebelytics/one-skill-to-rule-them-all"
-      },
-      "description": "Observes agent work sessions and turns recurring friction, corrections and judgement calls into proposed skill improvements and new skill candidates, with a human review gate.",
+      "source": "./",
+      "description": "Augury-patched fork of task-observer pinned to audited upstream 3463c7c (opt-in activation, no hooks, no report-back PRs). Observes agent work sessions and turns recurring friction, corrections and judgement calls into proposed skill improvements and new skill candidates, with a human review gate.",
       "category": "productivity",
       "keywords": [
         "agent-skills",
